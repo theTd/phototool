@@ -125,6 +125,7 @@ fun main(args: Array<String>) {
                     is ResultWithDiagnostics.Success<CompiledScript> -> compileResult.value
                 }
 
+                val mkdirCache = mutableSetOf<String>()
                 fileWalker { file ->
                     val eval = scriptHost.evaluator
                     val evalResult = eval(compiledScript, ScriptEvaluationConfiguration {
@@ -145,7 +146,13 @@ fun main(args: Array<String>) {
 
                     val dstFile = dst.resolve(returnValue)
                     if (!dstFile.exists() || overwrite) {
-                        file.renameTo(dstFile)
+                        val parent = dstFile.parentFile
+                        if (mkdirCache.add(parent.toString())) {
+                            if (!parent.mkdirs()) error("failed to create directory $parent")
+                        }
+
+                        val r = file.renameTo(dstFile)
+                        println("$file -> $dstFile: ${if (r) "success" else "fail"}")
                     }
                 }
             }
