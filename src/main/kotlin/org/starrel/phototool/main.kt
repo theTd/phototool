@@ -159,7 +159,7 @@ fun main(args: Array<String>) {
         }
     })
 
-    parser.subcommands(object : Subcommand("gifconv", "convert hif to jpg") {
+    parser.subcommands(object : Subcommand("hifconv", "convert hif to jpg") {
         val srcDir by option(ArgType.String, shortName = "s", description = "Source directory")
         val dstDir by option(ArgType.String, shortName = "d", description = "Destination directory")
 
