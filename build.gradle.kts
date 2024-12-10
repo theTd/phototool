@@ -17,6 +17,8 @@ dependencies {
     // https://mvnrepository.com/artifact/commons-io/commons-io
     implementation("commons-io:commons-io:2.17.0")
 
+    implementation("com.drewnoakes:metadata-extractor:2.19.0")
+
     // scripting
     api(kotlin("script-util", kotlinScriptUtilVersion))
     api(kotlin("scripting-jvm-host"))

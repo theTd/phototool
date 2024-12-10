@@ -1,0 +1,1 @@
+${yy}-${MM}-${dd}/${yy}${MM}${dd}${HH}${mm}_${dsc ?: nameWithoutExtension}.${extension}

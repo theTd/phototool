@@ -2,6 +2,8 @@
 
 package org.starrel.phototool
 
+import com.drew.imaging.ImageMetadataReader
+import com.drew.metadata.exif.ExifThumbnailDirectory
 import kotlinx.cli.*
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FilenameUtils
@@ -18,35 +20,47 @@ import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
 import kotlin.script.experimental.jvmhost.createJvmCompilationConfigurationFromTemplate
 import kotlin.system.exitProcess
 
-val File.yy: String
-    get() = Calendar.getInstance().run {
-        timeInMillis = lastModified()
-        (get(Calendar.YEAR) % 100).toString().padStart(2, '0')
+private val defaultTimeZone by lazy {
+    Calendar.getInstance().timeZone
+}
+
+private val tlFileCal: ThreadLocal<Pair<String, Date>> = ThreadLocal()
+
+private val File.effectiveDate: Date
+    get() {
+        val meta = runCatching { ImageMetadataReader.readMetadata(this) }.getOrNull()
+        return (meta?.let { meta ->
+            val directory = meta.getFirstDirectoryOfType(ExifThumbnailDirectory::class.java)
+            directory?.getDate(ExifThumbnailDirectory.TAG_DATETIME, defaultTimeZone) ?: lastModified()
+        } ?: lastModified()) as Date
     }
-val File.MM: String
-    get() = Calendar.getInstance().run {
-        timeInMillis = lastModified()
-        get(Calendar.MONTH).toString().padStart(2, '0')
+
+private val File.calInst: Calendar
+    get() {
+        val cached = tlFileCal.get()
+        if (cached?.first == absolutePath) return Calendar.getInstance().apply { timeInMillis = cached.second.time }
+        val d = effectiveDate
+        tlFileCal.set(absolutePath to d)
+        return Calendar.getInstance().apply { timeInMillis = d.time }
     }
-val File.dd: String
-    get() = Calendar.getInstance().run {
-        timeInMillis = lastModified()
-        get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
-    }
-val File.HH: String
-    get() = Calendar.getInstance().run {
-        timeInMillis = lastModified()
-        get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
-    }
-val File.mm: String
-    get() = Calendar.getInstance().run {
-        timeInMillis = lastModified()
-        get(Calendar.MINUTE).toString().padStart(2, '0')
-    }
-val File.ss: String
-    get() = Calendar.getInstance().run {
-        timeInMillis = lastModified()
-        get(Calendar.SECOND).toString().padStart(2, '0')
+
+val File.yy: String get() = (calInst.get(Calendar.YEAR) % 100).toString().padStart(2, '0')
+
+val File.MM: String get() = (calInst.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
+
+val File.dd: String get() = calInst.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
+
+val File.HH: String get() = calInst.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+
+val File.mm: String get() = calInst.get(Calendar.MINUTE).toString().padStart(2, '0')
+
+val File.ss: String get() = calInst.get(Calendar.SECOND).toString().padStart(2, '0')
+
+private val dscPattern = Regex("DSC\\d{4,}")
+val File.dsc: String?
+    get() {
+        val r = dscPattern.find(nameWithoutExtension) ?: return null
+        return r.value
     }
 
 fun main(args: Array<String>) {
@@ -60,7 +74,7 @@ fun main(args: Array<String>) {
         val groupPattern by option(
             ArgType.String,
             description = "Pattern"
-        ).default("\"\${yy}-\${MM}-\${dd}/\${yy}\${MM}\${dd}\${HH}\${mm}_\${nameWithoutExtension}.\${extension}\"")
+        ).default(File("pattern.txt").bufferedReader().readText())
 
         val fileNamePattern by argument(ArgType.String).vararg().optional()
 
@@ -119,7 +133,7 @@ fun main(args: Array<String>) {
             val compile = scriptHost.compiler
             runBlocking {
                 val compileResult =
-                    compile(groupPattern.toScriptSource("pattern"), compilationConfiguration)
+                    compile("\"$groupPattern\"".toScriptSource("pattern"), compilationConfiguration)
                 val compiledScript = when (compileResult) {
                     is ResultWithDiagnostics.Failure -> error("Failed to compile script: $compileResult")
                     is ResultWithDiagnostics.Success<CompiledScript> -> compileResult.value
@@ -136,7 +150,7 @@ fun main(args: Array<String>) {
                         is ResultWithDiagnostics.Success<EvaluationResult> -> {
                             val returnValue = evalResult.value.returnValue
                             when (returnValue) {
-                                is ResultValue.Error -> error("Error: ${returnValue.error}")
+                                is ResultValue.Error -> throw returnValue.error
                                 ResultValue.NotEvaluated -> error("Not evaluated")
                                 is ResultValue.Unit -> error("Unit")
                                 is ResultValue.Value -> returnValue.value ?: error("Null value")
@@ -148,7 +162,7 @@ fun main(args: Array<String>) {
                     if (!dstFile.exists() || overwrite) {
                         val parent = dstFile.parentFile
                         if (mkdirCache.add(parent.toString())) {
-                            if (!parent.mkdirs()) error("failed to create directory $parent")
+                            if (!parent.isDirectory && !parent.mkdirs()) error("failed to create directory $parent")
                         }
 
                         val r = file.renameTo(dstFile)
