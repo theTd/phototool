@@ -74,7 +74,7 @@ fun main(args: Array<String>) {
         val groupPattern by option(
             ArgType.String,
             description = "Pattern"
-        ).default(File("pattern.txt").bufferedReader().readText())
+        )
 
         val fileNamePattern by argument(ArgType.String).vararg().optional()
 
@@ -131,9 +131,13 @@ fun main(args: Array<String>) {
             }
             val scriptHost = BasicJvmScriptingHost()
             val compile = scriptHost.compiler
+
+            val effectiveGroupPattern =
+                groupPattern ?: this::class.java.classLoader.getResourceAsStream("pattern.txt")?.bufferedReader()?.readText()
+                ?: error("no groupPattern specified")
             runBlocking {
                 val compileResult =
-                    compile("\"$groupPattern\"".toScriptSource("pattern"), compilationConfiguration)
+                    compile("\"$effectiveGroupPattern\"".toScriptSource("pattern"), compilationConfiguration)
                 val compiledScript = when (compileResult) {
                     is ResultWithDiagnostics.Failure -> error("Failed to compile script: $compileResult")
                     is ResultWithDiagnostics.Success<CompiledScript> -> compileResult.value

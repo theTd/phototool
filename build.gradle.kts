@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.0.0"
+    application
 }
 
 group = "org.starrel"
@@ -26,10 +27,13 @@ dependencies {
 
     testImplementation(kotlin("test"))
 }
+application {
+    mainClass.set("org.starrel.phototool.MainKt")
+}
 
 tasks.test {
     useJUnitPlatform()
 }
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(11)
 }
